@@ -1,0 +1,206 @@
+<?php
+
+function marketo_forms_node_presave($node) {
+  if (empty($node->original)) {
+    _marketo_save_wfcomp($node);
+  }
+}
+
+function marketo_forms_node_update($node) {
+  _marketo_save_wfcomp($node);
+}
+
+function _marketo_save_wfcomp($node) {
+  if ($node->type ==='marketo_form') {
+    $scrape = new Scrape();
+    // Missing error handling here if slug doesn't exist
+    if(!$scrape->fetch(_marketo_forms_extract_url($node))) {
+      return;
+    }
+    $data = $scrape->fetchBetween("<form", "</form>", $scrape->result, true);
+
+    if($data) {
+      $doc = new DOMDocument();
+      @$doc->loadHTML($data);
+      $doc->normalizeDocument();
+    }
+    else {
+      return;
+    }
+    $drupal_form = array();
+    $cur = 0;
+    $drupal_form[$cur] = array();
+
+    foreach ($doc->getElementsByTagName('*') as $e) {
+      switch ($e->tagName) {
+        case 'form':
+          $node->field_marketo_url[LANGUAGE_NONE][0]['value'] = $e->getAttribute('action');
+          break;
+        case 'label':
+          if (isset($drupal_form[$cur]['label'])) {
+            $cur = $cur + 1;
+            $drupal_form[$cur] = array();
+          }
+          $drupal_form[$cur]['label'] = $e->nodeValue;
+          break;
+        case 'input':
+        case 'textarea':
+          $type = $e->getAttribute('type');
+          if ($type == 'submit' || $type == 'reset') {
+            continue;
+          }
+
+          if (isset($drupal_form[$cur]['name'])) {
+            $cur = $cur + 1;
+            $drupal_form[$cur] = array();
+          }
+          $drupal_form[$cur]['name'] = $e->getAttribute('name');
+          $drupal_form[$cur]['id'] = $e->getAttribute('id');
+          $drupal_form[$cur]['class'] = $e->getAttribute('class');
+          if (strstr($e->getAttribute('class'), 'mktFReq')) {
+            $drupal_form[$cur]['required'] = true;
+          }
+          $drupal_form[$cur]['type'] = $e->getAttribute('type');
+          $drupal_form[$cur]['value'] = $e->getAttribute('value');
+          $drupal_form[$cur]['tag'] = $e->tagName;
+          break;
+        case 'select':
+          if (isset($drupal_form[$cur]['name'])) {
+            $cur = $cur + 1;
+            $drupal_form[$cur] = array();
+          }
+          $drupal_form[$cur]['name'] = $e->getAttribute('name');
+          $drupal_form[$cur]['id'] = $e->getAttribute('id');
+          $drupal_form[$cur]['class'] = $e->getAttribute('class');
+          if (strstr($e->getAttribute('class'), 'mktFReq')) {
+            $drupal_form[$cur]['required'] = true;
+          }
+          $drupal_form[$cur]['type'] = $e->getAttribute('type');
+          $drupal_form[$cur]['tag'] = $e->tagName;
+          foreach ($e->getElementsByTagName('option') as $o) {
+            $drupal_form[$cur]['options'][$o->getAttribute('value')] = $o->nodeValue;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    # always remove Last_Campaign__c if it is set, per adam k
+    foreach($drupal_form as $key => $value) {
+      if (isset($value['id']) && $value['id'] == 'Last_Campaign__c') {
+        unset($drupal_form[$key]);
+      }
+    }
+    foreach ($drupal_form as $key => $value) {
+      $name_index = isset($value['label']) ? 'label' : 'name';
+      $name = $value[$name_index];
+      // NO-BREAK SPACE
+      if ($name == chr(194) . chr(160)) {
+        continue;
+      }
+      $node->webform['components'][$key]['nid'] = $node->nid;
+      $node->webform['components'][$key]['cid'] = $key + 1;
+      $node->webform['components'][$key]['pid'] = 0;
+      $node->webform['components'][$key]['weight'] = $key;
+      $node->webform['components'][$key]['name'] = $name;
+      if (isset($value['id'])) {
+        $node->webform['components'][$key]['form_key'] = $value['id'];
+      }
+      else {
+        $node->webform['components'][$key]['form_key'] = $value['name'];
+      }
+      if (isset($value['label'])) {
+        $node->webform['components'][$key]['name'] = $value['label'];
+      }
+      else {
+        $node->webform['components'][$key]['name'] = $value['name'];
+      }
+      if (isset($value['type']) && $value['type'] == 'text') {
+        $node->webform['components'][$key]['type'] = "textfield";
+      }
+      elseif (isset($value['type']) && $value['type'] == 'checkbox') {
+        $node->webform['components'][$key]['type'] = "select";
+        $node->webform['components'][$key]['value'] = $value['value'];
+        $node->webform['components'][$key]['extra']['items'] = $value['value']."|".$value['label'];
+        $node->webform['components'][$key]['extra']['multiple'] = 1;
+        $node->webform['components'][$key]['extra']['title_display'] = 'none';
+      }
+      elseif (isset($value['type']) && $value['type'] == 'hidden') {
+        $node->webform['components'][$key]['type'] = "hidden";
+        $node->webform['components'][$key]['value'] = $value['value'];
+      }
+      elseif (isset($value['tag'])) {
+        $node->webform['components'][$key]['type'] = $value['tag'];
+        if ($value['tag'] == 'select') {
+          $node->webform['components'][$key]['extra'] = array();
+          $node->webform['components'][$key]['extra']['items'] = '';
+          $node->webform['components'][$key]['extra']['aslist'] = 1;
+           // Remove the redundant Please Select option from the list.
+          array_shift($value['options']);
+          foreach ($value['options'] as $k => $v) {
+            $node->webform['components'][$key]['extra']['items'] .= $k . '|' . $v . "\n";
+          }
+        }
+      }
+      if(isset($value['required'])) {
+        $node->webform['components'][$key]['mandatory'] = $value['required'];
+      }
+    }
+  }
+}
+
+function _marketo_forms_extract_url($node) {
+  if(isset($node->marketo_forms_source['und'][0]['value'])) {
+    $marketo_slug = $node->marketo_forms_source['und'][0]['value'];
+    return "http://info.10gen.com/". $marketo_slug . ".html";
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+ * Implements hook_webform_submission_insert().
+ */
+function marketo_forms_webform_submission_insert($node, $submission) {
+  foreach ($node->webform['components'] as $cid => $definition) {
+    if ($definition['form_key']) {
+      $post[$definition['form_key']] = $submission->data[$cid]['value'][0];
+    }
+    else {
+      $post[$definition['name']] = $definition['value'];
+    }
+  }
+  $post['_mkt_trk'] = $_COOKIE['_mkto_trk'];
+  if ($node->field_marketo_url[LANGUAGE_NONE][0]['value']) {
+      DrupalQueue::get('marketo_forms')->createItem(array(
+        'url' => $node->field_marketo_url[LANGUAGE_NONE][0]['value'],
+        'post' => $post,
+      ));
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function marketo_forms_cron_queue_info() {
+  $queues['marketo_forms'] = array(
+    'worker callback' => 'marketo_forms_curl_post',
+    'time' => 60,
+  );
+  return $queues;
+}
+
+/**
+ * The queue worker executing a POST.
+ */
+function marketo_forms_curl_post($item) {
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $item['url']);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
+  curl_setopt($ch, CURLOPT_POST, TRUE);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $item['post']);
+  $output = curl_exec($ch);
+}

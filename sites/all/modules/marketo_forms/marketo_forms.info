@@ -1,0 +1,8 @@
+;$Id$
+name = "marketo_forms"
+description = "Marketo Form Integration"
+package = "Third-party Integration"
+core = 7.x
+php = 5.3
+version = "7.x-2.2"
+files[] = includes/scrape.inc

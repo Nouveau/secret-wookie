@@ -1,0 +1,113 @@
+<?php
+
+function marketo_forms_install() {
+  // create the marketo_forms content type
+  node_types_rebuild();
+
+  $t = get_t();
+  // define the content type as an array (same as in hook_node_info())
+  $type = array(
+      'type' => 'marketo_form',
+      'name' => $t('Marketo Form'),
+      'base' => 'node_content',
+      'description' => $t('Content type to handle marketo_forms.'),
+      'body_label' => $t('marketo_form Description'),
+      'promote' => 0,
+      'status' => 1,
+      'has_title' => 1,
+      'has_body' => 1,
+      'comment' => 0,
+  );
+
+  $content_type = node_type_set_defaults($type);
+
+  $type = (object) $type;
+
+  $saved_type = node_type_save($type);
+  node_types_rebuild();
+  menu_rebuild();
+  node_add_body_field($type);
+
+  // disable comments for this content type
+  variable_set('comment_marketo_forms', COMMENT_NODE_CLOSED);
+
+  // Create all the fields we are adding to our content type.
+  // http://api.drupal.org/api/function/field_create_field/7
+  foreach (_marketo_forms_installed_fields() as $field) {
+      field_create_field($field);
+  }
+
+  // Create all the instances for our fields.
+  // http://api.drupal.org/api/function/field_create_instance/7
+  foreach (_marketo_forms_installed_instances() as $instance) {
+      $instance['entity_type'] = 'node';
+      $instance['bundle'] = 'marketo_form';
+      field_create_instance($instance);
+  }
+  
+  // Enable content type as webform
+  $webform_node_types = variable_get('webform_node_types','');
+  $webform_node_types[] = 'marketo_form';
+  variable_set('webform_node_types',$webform_node_types);
+}
+
+function _marketo_forms_installed_fields() {
+   $t = get_t();
+   $fields = array(
+     // text field
+     'marketo_forms_source' => array(
+       'field_name'   => 'marketo_forms_source',
+       'label'        => $t('Marketo Source'),
+       'cardinality'  => 1,
+       'type'         => 'text',
+       'settings'     => array(
+         'max_length'  => 1000,
+       ),
+     ),
+   );
+
+   return $fields;
+}
+
+function _marketo_forms_installed_instances() {
+  $t = get_t();
+  $instances = array(
+    // instance of the text field above
+    'marketo_forms_source' => array(
+      'field_name'  => 'marketo_forms_source',
+      'label'       => $t('Marketo Form Source'),
+      'cardinality' => 1,
+      'widget'      => array(
+        'type'       => 'text_textfield',
+        'settings'   => array('size' => 60),
+      ),
+    ),
+  );
+
+  return $instances;
+}
+
+function marketo_forms_uninstall() {
+  // gather all the content while the module was enabled
+  $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+  $result = db_query($sql, array(':type' => 'marketo_forms'));
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+
+  // delete all the nodes at once
+  node_delete_multiple($nids);
+
+  // delete any remaining field instances attached to this content type
+  $instances = field_info_instances('node', 'marketo_forms');
+  foreach ($instances as $instance_name => $instance) {
+    field_delete_instance($instance);
+  }
+
+  // delete our content type
+  node_type_delete('marketo_forms');
+
+  // purge all field information
+  field_purge_batch(1000);
+}

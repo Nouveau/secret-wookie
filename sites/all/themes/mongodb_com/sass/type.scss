@@ -1,0 +1,119 @@
+@mixin border-radius($radius) {
+  -moz-border-radius: $radius;
+  -webkit-border-radius: $radius;
+  -o-border-radius: $radius;
+  -ms-border-radius: $radius;
+  -khtml-border-radius: $radius;
+  border-radius: $radius;
+}
+
+$green: #64A70B;
+$ltr-blue: #e8f3f9;
+$lt-blue: #bcdaed;
+$blue: #224390;
+$gray: #615F5E;
+
+/*
+ *  General
+ */
+body {
+  font: 14px/1.5 "PT Sans","Helvetica","Arial",sans-serif;
+  font-weight: 400;
+  color: $gray;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #003594;
+  font-family: "PT Sans","Helvetica","Arial",sans-serif;
+  font-weight: bold;
+  letter-spacing: normal;
+}
+
+h1 {
+  font-size: 30px;
+  line-height: 42px;
+  margin: 0 0 24px 0;
+}
+
+h2 {
+  font-size: 20px;
+  line-height: 1.4em;
+  margin-bottom: 12px;
+  &.block-title {
+    font-size: 18px;
+    line-height: 24px;
+    color: $gray;
+    margin: 0;
+    padding: 3px 0 9px 0;
+    border-bottom: solid 1px lighten($gray, 40%);
+  }
+  &.node-title {
+    font-size: 21px;
+  }
+  a:link, a:visited {
+    color: $blue;
+  }
+}
+
+h3 {
+  font-size: 15px;
+  text-transform: uppercase;
+  margin: 0 0 15px;
+}
+
+h4 {
+  font-size:100%;
+  color:#999;
+  margin:15px 0 5px 0;
+}
+
+p {
+  font-size: 16px;
+  line-height: 24px;
+  color: $gray;
+  margin: 0 0 24px 0;
+  padding: 0;
+}
+
+p.button, span.button {
+  margin: 0;
+  a {
+    text-decoration: none;
+    display: block;
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 30px;
+    color: white;
+    text-align: center;
+    height: 29px;
+    border: 1px solid #6bb245;
+    @include border-radius(4px);
+    -moz-box-shadow: inset rgba(255, 255, 255, 0.2) 0 0 2px, rgba(51, 51, 51, 0.3) 0 1px 2px;
+    -webkit-box-shadow: inset rgba(255, 255, 255, 0.2) 0 0 2px, rgba(51, 51, 51, 0.3) 0 1px 2px;
+    -o-box-shadow: inset rgba(255, 255, 255, 0.2) 0 0 2px, rgba(51, 51, 51, 0.3) 0 1px 2px;
+    box-shadow: inset rgba(255, 255, 255, 0.2) 0 0 2px, rgba(51, 51, 51, 0.3) 0 1px 2px;
+    background-color: #6bb245;
+    &:hover {
+      background-color: darken(#6bb245, 4%);
+    }
+  }
+}
+
+p.button-subtle {
+  @extend p.button;
+  a {
+    border: 1px solid #bbbdbd;
+    color: #666;
+    text-shadow: white 0 -1px 0;
+    @include linear-gradient(#f4f4f4, #dcdcdc);
+    &:hover {
+      background-color: #ddd;
+      @include linear-gradient(white, #cfcfcf);
+    }
+  }
+}
+
+strong {
+  font-weight: bold;
+  color: #222;
+}
